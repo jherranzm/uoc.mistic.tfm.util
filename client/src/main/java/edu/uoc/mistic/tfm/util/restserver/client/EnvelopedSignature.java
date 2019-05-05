@@ -7,6 +7,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Array;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.KeyException;
 import java.security.KeyStore;
@@ -20,7 +21,10 @@ import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 
 import javax.xml.crypto.MarshalException;
@@ -37,6 +41,7 @@ import javax.xml.crypto.dsig.dom.DOMSignContext;
 import javax.xml.crypto.dsig.keyinfo.KeyInfo;
 import javax.xml.crypto.dsig.keyinfo.KeyInfoFactory;
 import javax.xml.crypto.dsig.keyinfo.KeyValue;
+import javax.xml.crypto.dsig.keyinfo.X509Data;
 import javax.xml.crypto.dsig.spec.C14NMethodParameterSpec;
 import javax.xml.crypto.dsig.spec.TransformParameterSpec;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -87,8 +92,9 @@ public class EnvelopedSignature {
 			fileOut = fullPathDirToExport+fileName+".xsig";
 			
 			Security.addProvider(new BouncyCastleProvider());
-			Security.addProvider(new org.jcp.xml.dsig.internal.dom.XMLDSigRI());
+			Security.addProvider(new org.apache.jcp.xml.dsig.internal.dom.XMLDSigRI());
 			CertificateFactory certFactory = CertificateFactory.getInstance("X.509", SECURITY_PROVIDER);
+			
 
 			InputStream isServerCrt = new FileInputStream(
 					new File(SERVER_CERTIFICATE));
@@ -125,7 +131,7 @@ public class EnvelopedSignature {
 //			}
 
 			XMLSignatureFactory fac = XMLSignatureFactory.getInstance("DOM",
-					new org.jcp.xml.dsig.internal.dom.XMLDSigRI());
+					new org.apache.jcp.xml.dsig.internal.dom.XMLDSigRI());
 
 			// Create a Reference to the enveloped document
 			Reference ref = fac.newReference("", fac.newDigestMethod(DigestMethod.SHA256, null),
@@ -140,9 +146,15 @@ public class EnvelopedSignature {
 			// Create a KeyValue containing the DSA PublicKey that was generated
 			KeyInfoFactory kif = fac.getKeyInfoFactory();
 			KeyValue kv = kif.newKeyValue(certificate.getPublicKey());
+			
+			List x509Content = new ArrayList();
+			x509Content.add(certificate.getSubjectX500Principal().getName());
+			x509Content.add(certificate);
+			X509Data xd = kif.newX509Data(x509Content);
 
 			// Create a KeyInfo and add the KeyValue to it
-			KeyInfo ki = kif.newKeyInfo(Collections.singletonList(kv));
+			//KeyInfo ki = kif.newKeyInfo(Collections.singletonList(kv));
+			KeyInfo ki = kif.newKeyInfo(Arrays.asList(kv, xd));
 
 			// Instantiate the document to be signed
 			DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
