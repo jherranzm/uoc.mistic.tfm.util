@@ -7,7 +7,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.lang.reflect.Array;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.KeyException;
 import java.security.KeyStore;
@@ -25,7 +24,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 
 import javax.xml.crypto.MarshalException;
 import javax.xml.crypto.dsig.CanonicalizationMethod;
@@ -64,6 +62,7 @@ public class EnvelopedSignature {
 	private static final String SECURITY_PROVIDER = "BC";
 	private static final String SERVER_P12 = "/Users/jherranzm/Dropbox/Jose_Luis/TFM_2019/PKI/private/server.p12";
 	private static final String SERVER_CERTIFICATE = "/Users/jherranzm/Dropbox/Jose_Luis/TFM_2019/PKI/certs/server.crt";
+	private static final String CA_CERTIFICATE = "/Users/jherranzm/Dropbox/Jose_Luis/TFM_2019/PKI/certs/ca.crt";
 	public final static String PKCS12_PASSWORD = "Th2S5p2rStr4ngP1ss";
 	public static final String PKCS_12 = "PKCS12";
 
@@ -82,6 +81,7 @@ public class EnvelopedSignature {
 		
 		try {
 			
+			logger.info("Processing " + fullPathFileToSign);
 			File fileToSign = new File(fullPathFileToSign);
 			if (!fileToSign.exists()) {
 				throw new FileNotFoundException("No existe el fichero " + fullPathFileToSign);
@@ -96,18 +96,20 @@ public class EnvelopedSignature {
 			CertificateFactory certFactory = CertificateFactory.getInstance("X.509", SECURITY_PROVIDER);
 			
 
-			InputStream isServerCrt = new FileInputStream(
-					new File(SERVER_CERTIFICATE));
-			InputStream isServerKey = new FileInputStream(
-					new File(SERVER_P12));
+			InputStream isServerCrt = new FileInputStream(new File(SERVER_CERTIFICATE));
+			InputStream isCACrt = new FileInputStream(new File(CA_CERTIFICATE));
+			InputStream isServerKey = new FileInputStream(new File(SERVER_P12));
 
-			X509Certificate certificate = (X509Certificate) certFactory.generateCertificate(isServerCrt);
+			X509Certificate serverCertificate = (X509Certificate) certFactory.generateCertificate(isServerCrt);
+			X509Certificate caCertificate = (X509Certificate) certFactory.generateCertificate(isCACrt);
 
 			char[] keystorePassword = PKCS12_PASSWORD.toCharArray();
 			char[] keyPassword = PKCS12_PASSWORD.toCharArray();
 
 			KeyStore keystore = KeyStore.getInstance(PKCS_12, SECURITY_PROVIDER);
 			keystore.load(isServerKey, keystorePassword);
+			keystore.setCertificateEntry("serverCertificate", serverCertificate);
+			keystore.setCertificateEntry("caCertificate", caCertificate);
 			isServerKey.close();
 
 			PrivateKey key = (PrivateKey) keystore.getKey("Server", keyPassword);
@@ -115,20 +117,6 @@ public class EnvelopedSignature {
 				System.err.println(EnvelopedSignature.class.getCanonicalName() + " ERROR NO hay key!");
 			}
 			;
-
-//			for (Provider p : Security.getProviders()) {
-//				logger.info("Provider:[" + p.getName() + "] [" + p.getInfo() + "]");
-//			}
-
-			Set<String> messageDigest = Security.getAlgorithms("MessageDigest");
-//			for (String s : messageDigest) {
-//				logger.info("MessageDigest:messageDigest: [" + s + "]");
-//			}
-
-			Set<String> algorithms = Security.getAlgorithms("Algorithm");
-//			for (String s : algorithms) {
-//				logger.info("Algorithm:algorithm: [" + s + "]");
-//			}
 
 			XMLSignatureFactory fac = XMLSignatureFactory.getInstance("DOM",
 					new org.apache.jcp.xml.dsig.internal.dom.XMLDSigRI());
@@ -145,11 +133,12 @@ public class EnvelopedSignature {
 
 			// Create a KeyValue containing the DSA PublicKey that was generated
 			KeyInfoFactory kif = fac.getKeyInfoFactory();
-			KeyValue kv = kif.newKeyValue(certificate.getPublicKey());
+			KeyValue kv = kif.newKeyValue(serverCertificate.getPublicKey());
 			
 			List x509Content = new ArrayList();
-			x509Content.add(certificate.getSubjectX500Principal().getName());
-			x509Content.add(certificate);
+			x509Content.add(serverCertificate.getSubjectX500Principal().getName());
+			x509Content.add(serverCertificate);
+			x509Content.add(caCertificate);
 			X509Data xd = kif.newX509Data(x509Content);
 
 			// Create a KeyInfo and add the KeyValue to it
@@ -161,10 +150,6 @@ public class EnvelopedSignature {
 			dbf.setNamespaceAware(true);
 			Document doc = dbf.newDocumentBuilder()
 					.parse(new FileInputStream(fileToSign));
-//			logger.info("doc.getNodeName() :  " + doc.getNodeName());
-//			logger.info("doc.getBaseURI() :  " + doc.getBaseURI());
-//			logger.info("doc.getDocumentURI() :  " + doc.getDocumentURI());
-//			logger.info("doc.getDocumentElement() :  " + doc.getDocumentElement());
 
 			// Create a DOMSignContext and specify the DSA PrivateKey and
 			// location of the resulting XMLSignature's parent element
